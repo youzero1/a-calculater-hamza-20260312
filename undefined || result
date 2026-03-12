@@ -1,0 +1,83 @@
+null) {
+      return NextResponse.json({ error: 'Missing expression or result' }, { status: 400 });
+    }
+
+    const dataSource = await getDataSource();
+    const repo = dataSource.getRepository(CalculationHistory);
+
+    const entry = repo.create({
+      expression: String(expression),
+      result: String(result),
+    });
+    await repo.save(entry);
+
+    return NextResponse.json({ success: true, entry });
+  } catch (error) {
+    console.error('Error saving history:', error);
+    return NextResponse.json({ error: 'Failed to save history' }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  try {
+    const dataSource = await getDataSource();
+    const repo = dataSource.getRepository(CalculationHistory);
+    await repo.clear();
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error clearing history:', error);
+    return NextResponse.json({ error: 'Failed to clear history' }, { status: 500 });
+  }
+}
+</file>
+
+<file path="src/app/page.tsx">
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import styles from './page.module.css';
+
+interface HistoryEntry {
+  id: number;
+  expression: string;
+  result: string;
+  createdAt: string;
+}
+
+type ButtonType = 'number' | 'operator' | 'equals' | 'clear' | 'special';
+
+interface CalcButton {
+  label: string;
+  value: string;
+  type: ButtonType;
+  wide?: boolean;
+}
+
+const BUTTONS: CalcButton[] = [
+  { label: 'AC', value: 'clear', type: 'clear' },
+  { label: '+/-', value: 'negate', type: 'special' },
+  { label: '%', value: 'percent', type: 'special' },
+  { label: '÷', value: '/', type: 'operator' },
+
+  { label: '7', value: '7', type: 'number' },
+  { label: '8', value: '8', type: 'number' },
+  { label: '9', value: '9', type: 'number' },
+  { label: '×', value: '*', type: 'operator' },
+
+  { label: '4', value: '4', type: 'number' },
+  { label: '5', value: '5', type: 'number' },
+  { label: '6', value: '6', type: 'number' },
+  { label: '−', value: '-', type: 'operator' },
+
+  { label: '1', value: '1', type: 'number' },
+  { label: '2', value: '2', type: 'number' },
+  { label: '3', value: '3', type: 'number' },
+  { label: '+', value: '+', type: 'operator' },
+
+  { label: '0', value: '0', type: 'number', wide: true },
+  { label: '.', value: '.', type: 'number' },
+  { label: '=', value: '=', type: 'equals' },
+];
+
+export function formatNumber(num: string): string {
+  if (num
