@@ -1,0 +1,196 @@
+'NaN') {
+    return num;
+  }
+  const parsed = parseFloat(num);
+  if (isNaN(parsed)) return '0';
+  if (Math.abs(parsed) >= 1e15) {
+    return parsed.toExponential(6);
+  }
+  const formatted = parseFloat(parsed.toPrecision(12)).toString();
+  return formatted;
+}
+
+export function calculate(a: string, op: string, b: string): string {
+  const numA = parseFloat(a);
+  const numB = parseFloat(b);
+  let result: number;
+  switch (op) {
+    case '+':
+      result = numA + numB;
+      break;
+    case '-':
+      result = numA - numB;
+      break;
+    case '*':
+      result = numA * numB;
+      break;
+    case '/':
+      if (numB === 0) return 'Error';
+      result = numA / numB;
+      break;
+    default:
+      return b;
+  }
+  return formatNumber(result.toString());
+}
+
+export default function Home() {
+  const [display, setDisplay] = useState<string>('0');
+  const [expression, setExpression] = useState<string>('');
+  const [prevValue, setPrevValue] = useState<string | null>(null);
+  const [operator, setOperator] = useState<string | null>(null);
+  const [waitingForOperand, setWaitingForOperand] = useState<boolean>(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState<boolean>(false);
+  const [historyLoading, setHistoryLoading] = useState<boolean>(false);
+
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch('/api/history');
+      const data = (await res.json()) as { history?: HistoryEntry[] };
+      setHistory(data.history || []);
+    } catch (err) {
+      console.error('Failed to fetch history', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchHistory();
+  }, [fetchHistory]);
+
+  const saveToHistory = async (expr: string, result: string) => {
+    try {
+      await fetch('/api/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expression: expr, result }),
+      });
+      await fetchHistory();
+    } catch (err) {
+      console.error('Failed to save history', err);
+    }
+  };
+
+  const clearHistory = async () => {
+    try {
+      await fetch('/api/history', { method: 'DELETE' });
+      setHistory([]);
+    } catch (err) {
+      console.error('Failed to clear history', err);
+    }
+  };
+
+  const handleButton = useCallback(
+    (btn: CalcButton) => {
+      if (btn.value === 'clear') {
+        setDisplay('0');
+        setExpression('');
+        setPrevValue(null);
+        setOperator(null);
+        setWaitingForOperand(false);
+        return;
+      }
+
+      if (btn.value === 'negate') {
+        if (display === 'Error') return;
+        const negated = (parseFloat(display) * -1).toString();
+        setDisplay(negated);
+        return;
+      }
+
+      if (btn.value === 'percent') {
+        if (display === 'Error') return;
+        const pct = (parseFloat(display) / 100).toString();
+        setDisplay(formatNumber(pct));
+        return;
+      }
+
+      if (btn.type === 'operator') {
+        if (display === 'Error') return;
+        if (prevValue !== null && operator && !waitingForOperand) {
+          const result = calculate(prevValue, operator, display);
+          setDisplay(result);
+          setPrevValue(result);
+          setExpression(`${result} ${btn.label}`);
+        } else {
+          setPrevValue(display);
+          setExpression(`${display} ${btn.label}`);
+        }
+        setOperator(btn.value);
+        setWaitingForOperand(true);
+        return;
+      }
+
+      if (btn.value === '=') {
+        if (display === 'Error') return;
+        if (prevValue !== null && operator) {
+          const opLabel =
+            operator === '+'
+              ? '+'
+              : operator === '-'
+                ? '−'
+                : operator === '*'
+                  ? '×'
+                  : '÷';
+          const expr = `${prevValue} ${opLabel} ${display}`;
+          const result = calculate(prevValue, operator, display);
+          setDisplay(result);
+          setExpression(`${expr} =`);
+          void saveToHistory(expr, result);
+          setPrevValue(null);
+          setOperator(null);
+          setWaitingForOperand(true);
+        }
+        return;
+      }
+
+      if (btn.value === '.') {
+        if (waitingForOperand) {
+          setDisplay('0.');
+          setWaitingForOperand(false);
+          return;
+        }
+        if (!display.includes('.')) {
+          setDisplay(display + '.');
+        }
+        return;
+      }
+
+      // digit
+      if (waitingForOperand) {
+        setDisplay(btn.value);
+        setWaitingForOperand(false);
+      } else {
+        if (display === '0') {
+          setDisplay(btn.value);
+        } else if (display.replace('-', '').replace('.', '').length >= 15) {
+          return;
+        } else {
+          setDisplay(display + btn.value);
+        }
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [display, prevValue, operator, waitingForOperand],
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key;
+      if (key >= '0' && key <= '9') {
+        handleButton({ label: key, value: key, type: 'number' });
+      } else if (key === '.') {
+        handleButton({ label: '.', value: '.', type: 'number' });
+      } else if (key === '+') {
+        handleButton({ label: '+', value: '+', type: 'operator' });
+      } else if (key === '-') {
+        handleButton({ label: '−', value: '-', type: 'operator' });
+      } else if (key === '*') {
+        handleButton({ label: '×', value: '*', type: 'operator' });
+      } else if (key === '/') {
+        e.preventDefault();
+        handleButton({ label: '÷', value: '/', type: 'operator' });
+      } else if (key
